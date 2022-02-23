@@ -1,0 +1,62 @@
+name: hspec-golden-binary
+version: 0.1.0.0
+synopsis: Use tests to monitor changes in Binary serialization
+description: Use tests to monitor changes in Binary serialization
+category: Testing
+author: Bruno Cadorette
+maintainer: bruno-cadorette@plowtech.net
+copyright: 2022 Plow Technologies
+license: BSD3
+homepage: https://github.com/plow-technologies/hspec-golden-binary#readme
+github: plow-technologies/hspec-golden-binary
+extra-source-files:
+  - README.md
+  - ChangeLog.md
+
+library:
+  source-dirs: src
+  exposed-modules: 
+  - Test.Binary.GenericSpecs
+  - Test.Binary.Internal.ADT.GoldenSpecs
+  - Test.Binary.Internal.ADT.RoundtripSpecs
+  - Test.Binary.Internal.GoldenSpecs
+  - Test.Binary.Internal.RoundtripSpecs
+  - Test.Binary.Internal.Utils
+  dependencies:
+  - base >= 4.7 && < 5
+  - bytestring
+  - directory
+  - filepath
+  - hspec
+  - random
+  - quickcheck-arbitrary-adt >= 0.3.0.0
+  - QuickCheck
+  - transformers
+  - HUnit
+  - binary
+  ghc-options:
+  - -Wall
+#  - -Werror
+
+tests:
+  test:
+    main: Spec.hs
+    source-dirs: test
+    dependencies:
+    - base
+    - binary
+    - bytestring
+    - directory
+    - hspec
+    - hspec-core
+    - hspec-golden-binary
+    - silently
+    - quickcheck-arbitrary-adt
+    - QuickCheck
+    - transformers
+    ghc-options:
+    - -Wall
+#    - -Werror
+#    - -fwarn-incomplete-uni-patterns
+#    - -fwarn-incomplete-record-updates
+#    - -fno-warn-name-shadowing
