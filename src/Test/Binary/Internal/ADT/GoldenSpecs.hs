@@ -150,6 +150,8 @@ compareWithGolden randomOption topDir mModuleName typeName cap goldenFile = do
             ++ goldenFile
             ++ ".\n"
             ++ "  Testing round-trip decoding/encoding of golden file."
+            ++ "\nExpected: " ++ show goldenSamples
+            ++ "\nBut got:  " ++ show newSamples
         let reencodedGoldenSamples = B.encode goldenSamples
         if reencodedGoldenSamples == fileContent
           then -- pass the test because round-trip decode/encode still gives the same bytes
