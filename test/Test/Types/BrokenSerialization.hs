@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 
 module Test.Types.BrokenSerialization where
 
@@ -49,3 +50,11 @@ instance Arbitrary SumType where
 
 data P2 = P2 String Int deriving (Eq, Show, Generic)
 instance Binary P2
+
+
+newtype FailBinary = FailBinary Int deriving (Generic, Eq, Show, Arbitrary)
+instance Binary FailBinary where
+  put (FailBinary n) = put n
+  get = fail "This is made for failing!"
+
+instance ToADTArbitrary FailBinary

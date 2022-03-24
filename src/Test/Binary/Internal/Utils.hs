@@ -6,6 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- |
 -- Module      : Test.Binary.Internal.Utils
@@ -18,7 +19,8 @@ module Test.Binary.Internal.Utils where
 
 import Control.Exception
 import Data.ByteString.Lazy (ByteString)
-import Data.Int (Int32)
+import qualified Data.ByteString.Lazy as BL
+import Data.Int (Int32, Int64)
 import Data.Proxy
 import Data.Typeable
 import GHC.Exts
@@ -29,6 +31,9 @@ import Test.QuickCheck.Gen
 import Test.QuickCheck.Random
 import Prelude
 import qualified Data.Binary as Binary 
+import qualified Data.Binary.Put as Binary 
+import qualified Data.Binary.Get as Binary 
+import Test.QuickCheck.Arbitrary.ADT
 
 -- | Option to indicate whether to create a separate comparison file or overwrite the golden file.
 -- A separate file allows you to use diff to compare.
@@ -62,7 +67,7 @@ data Settings = Settings
     fileType :: String
   }
 
-type GoldenBinaryrConstraints s a = (GoldenBinaryr s, Ctx s (RandomSamples a))
+type GoldenBinaryrConstraints s a = (GoldenBinaryr s, Ctx s (RandomSamples a), Show a, Eq a)
 
 class GoldenBinaryr s where
   type Ctx s :: * -> Constraint
@@ -113,7 +118,34 @@ data RandomSamples a = RandomSamples
   }
   deriving (Eq, Ord, Show, Generic)
 
-instance Binary.Binary a => Binary.Binary (RandomSamples a)
+instance Arbitrary a => ToADTArbitrary (RandomSamples a)
+
+instance Arbitrary a => Arbitrary (RandomSamples a) where
+  arbitrary = RandomSamples <$> arbitrary <*> arbitrary
+
+instance Binary.Binary a => Binary.Binary (RandomSamples a) where
+  put (RandomSamples seed samples) = do
+    Binary.put @Int32 seed
+    Binary.put @[LengthEncoded a] (fmap LengthEncoded samples)
+  get = do
+    seed <- Binary.get @Int32
+    samples <- Binary.get @[LengthEncoded a]
+    return $ RandomSamples seed (fmap unLengthEncoded samples)
+
+newtype LengthEncoded a = LengthEncoded {unLengthEncoded :: a } deriving (Eq, Show, Arbitrary, Generic)
+
+instance Binary.Binary a => Binary.Binary (LengthEncoded a) where
+  put (LengthEncoded a) = do 
+    let bs = Binary.runPut (Binary.put a)
+    let len = BL.length bs
+    Binary.put @Int64 len
+    Binary.putLazyByteString bs
+  get = do
+    len <- Binary.get @Int64
+    bs <- Binary.getLazyByteString len
+    return $ LengthEncoded $ Binary.decode bs
+
+instance Arbitrary a => ToADTArbitrary (LengthEncoded a)
 
 -- | Apply the seed.
 setSeed :: Int -> Gen a -> Gen a

@@ -79,7 +79,7 @@ roundtripSpecs Proxy = Roundtrip.roundtripSpecs (Proxy :: Proxy (GoldenBinary a)
 -- to help monitor changes.
 goldenSpecs :: 
   forall a.
-  (Arbitrary a, Binary.Binary a, Typeable a, Show a) =>
+  (Arbitrary a, Binary.Binary a, Typeable a, Show a, Eq a) =>
   Settings ->
   Proxy a ->
   Spec
@@ -88,14 +88,14 @@ goldenSpecs settings Proxy = Golden.goldenSpecs settings (Proxy :: Proxy (Golden
 -- | run roundtrip and golden test for a type.
 -- sampleSize is used only when creating the golden file. When it is
 -- compared, the sampleSize is derived from the file.
-roundtripAndGoldenSpecs :: (Arbitrary a, Binary.Binary a, Typeable a, Show a) => Proxy a -> Spec
+roundtripAndGoldenSpecs :: (Arbitrary a, Binary.Binary a, Typeable a, Show a, Eq a) => Proxy a -> Spec
 roundtripAndGoldenSpecs proxy =
   roundtripAndGoldenSpecsWithSettings defaultSettings proxy
 
 -- | 'roundtripAndGoldenSpecs' with custom settings.
 roundtripAndGoldenSpecsWithSettings ::
   forall a.
-  (Arbitrary a, Binary.Binary a, Typeable a, Show a) =>
+  (Arbitrary a, Binary.Binary a, Typeable a, Show a, Eq a) =>
   Settings ->
   Proxy a ->
   Spec

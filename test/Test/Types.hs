@@ -3,6 +3,7 @@
 module Test.Types where
 
 import Data.Binary
+import Data.Binary.Get
 import GHC.Generics
 import Test.QuickCheck
 import Test.QuickCheck.Arbitrary.ADT
@@ -32,3 +33,15 @@ instance ToADTArbitrary SumType
 
 instance Arbitrary SumType where
   arbitrary = genericArbitrary
+
+newtype ConsumeAll = ConsumeAll [Int] deriving (Eq, Show, Generic)
+
+instance Binary ConsumeAll where
+  get = fmap (ConsumeAll . decode) getRemainingLazyByteString
+  put (ConsumeAll xs) = put xs
+
+instance ToADTArbitrary ConsumeAll
+
+instance Arbitrary ConsumeAll where
+  arbitrary = genericArbitrary
+

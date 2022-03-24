@@ -120,7 +120,7 @@ compareWithGolden settings typeNameInfo Proxy goldenFile comparisonFile = do
   let sampleSize = Prelude.length $ samples $ unlift goldenSamples
   newSamples :: s (RandomSamples a) <- lift <$> mkRandomSamples sampleSize (Proxy :: Proxy a) goldenSeed
   whenFails (writeComparisonFile newSamples) $ do
-    if encode newSamples == encode goldenSamples
+    if unlift newSamples == unlift goldenSamples
       then return ()
       else do
         -- fallback to testing roundtrip decoding/encoding of golden file
