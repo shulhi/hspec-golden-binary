@@ -1,5 +1,8 @@
 # Revision history for hspec-golden-binary
 
+## 0.3.0.0  -- 2022-12-15
+* Add roundtripFromFile. Run golden tests without using the Arbitrary instance. Will decode the golden file and test if the encoding function is equivalent to the golden file 
+
 
 ## 0.2.0.0  -- 2021-03-24
 

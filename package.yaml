@@ -1,5 +1,5 @@
 name: hspec-golden-binary
-version: 0.1.1.0
+version: 0.3.0.0
 synopsis: Use tests to monitor changes in Binary serialization
 description: Use tests to monitor changes in Binary serialization
 category: Testing

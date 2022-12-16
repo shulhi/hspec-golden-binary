@@ -28,6 +28,8 @@ module Test.Binary.GenericSpecs
     goldenSpecs
   , roundtripSpecs
   , roundtripAndGoldenSpecs
+  , roundtripFromFile
+  , roundtripFromFileWithSettings
 
   -- * ToADTArbitrary testing
   , goldenADTSpecs
@@ -35,6 +37,8 @@ module Test.Binary.GenericSpecs
   , roundtripAndGoldenSpecsWithSettings
   , roundtripAndGoldenADTSpecs
   , roundtripAndGoldenADTSpecsWithSettings
+  , roundtripADTFromFile
+  , roundtripADTFromFileWithSettings
 
   -- * Make Files
   , mkGoldenFileForType
@@ -60,6 +64,8 @@ import Test.Binary.Internal.Utils
 import Test.Hspec
 import Test.QuickCheck
 import Test.QuickCheck.Arbitrary.ADT
+import qualified Test.Binary.Internal.RoundtripFromFile
+import qualified Test.Binary.Internal.ADT.RoundtripFromFile
 
 roundtripSpecs :: forall a . (Arbitrary a, Binary.Binary a, Typeable a, Show a) => Proxy a -> Spec
 roundtripSpecs Proxy = Roundtrip.roundtripSpecs (Proxy :: Proxy (GoldenBinary a))
@@ -140,3 +146,24 @@ instance Arbitrary a => Arbitrary (GoldenBinary a) where
 
 defaultSettings :: Settings
 defaultSettings = genericDefaultSettings "bin"
+
+
+roundtripFromFile :: forall a. 
+  (Arbitrary a, Typeable a, Eq a, Show a, Binary.Binary a)
+  => Proxy a -> Spec
+roundtripFromFile = roundtripFromFileWithSettings defaultSettings
+
+roundtripFromFileWithSettings :: forall a. 
+  (Arbitrary a, Typeable a, Eq a, Show a, Binary.Binary a)
+  => Settings -> Proxy a -> Spec
+roundtripFromFileWithSettings = Test.Binary.Internal.RoundtripFromFile.roundtripFromFile
+
+roundtripADTFromFile :: forall a. 
+  (ToADTArbitrary a, Typeable a, Eq a, Show a, Binary.Binary a)
+  => Proxy a -> Spec
+roundtripADTFromFile = roundtripADTFromFileWithSettings defaultSettings
+
+roundtripADTFromFileWithSettings :: forall a. 
+  (ToADTArbitrary a, Typeable a, Eq a, Show a, Binary.Binary a)
+  => Settings -> Proxy a -> Spec
+roundtripADTFromFileWithSettings = Test.Binary.Internal.ADT.RoundtripFromFile.roundtripADTFromFile
