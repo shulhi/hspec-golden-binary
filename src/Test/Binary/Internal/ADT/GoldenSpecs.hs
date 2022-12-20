@@ -1,9 +1,11 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- |
 -- Module      : Test.Binary.Internal.ADT.GoldenSpecs
@@ -19,12 +21,11 @@ module Test.Binary.Internal.ADT.GoldenSpecs where
 import Control.Arrow
 import Control.Exception
 import Control.Monad
-import Data.ByteString.Lazy (readFile, writeFile, ByteString)
+import Data.ByteString.Lazy (readFile, writeFile)
 import Data.Int (Int32)
 import Data.Maybe (isJust)
 import Data.Proxy
 import Data.Binary
-import qualified Data.Binary as B
 import System.Directory
 import System.Environment (lookupEnv)
 import System.FilePath
@@ -35,6 +36,7 @@ import Test.Hspec
 import Test.QuickCheck
 import Test.QuickCheck.Arbitrary.ADT
 import Prelude hiding (readFile, writeFile)
+import qualified Data.Binary as Binary
 
 -- | Tests to ensure that binary encoding has not unintentionally changed. This
 -- could be caused by the following:
@@ -51,7 +53,7 @@ import Prelude hiding (readFile, writeFile)
 -- to help monitor changes.
 goldenADTSpecs ::
   forall a.
-  (ToADTArbitrary a, Eq a, Show a, Binary a) =>
+  (ToADTArbitrary a, Eq a, Show a, Binary.Binary a) =>
   Settings ->
   Proxy a ->
   Spec
@@ -61,7 +63,7 @@ goldenADTSpecs settings proxy = goldenADTSpecsWithNote settings proxy Nothing
 -- 'describe' function.
 goldenADTSpecsWithNote ::
   forall a.
-  (ToADTArbitrary a, Eq a, Show a, Binary a) =>
+  (ToADTArbitrary a, Eq a, Show a, Binary.Binary a) =>
   Settings ->
   Proxy a ->
   Maybe String ->
@@ -79,14 +81,14 @@ generateInfoFromADT proxy = fmap (\x -> (adtModuleName x, adtTypeName x, adtCAPs
 -- | test a single set of values from a constructor for a given type.
 testConstructor ::
   forall a.
-  (Eq a, Show a, Binary a, ToADTArbitrary a) =>
+  (Eq a, Show a, Binary.Binary a, ToADTArbitrary a) =>
   Settings ->
   String ->
   String ->
   ConstructorArbitraryPair a ->
   SpecWith (Arg (IO ()))
 testConstructor Settings {..} moduleName typeName cap =
-  it ("produces the same binary as is found in " ++ goldenFile) $ do
+  it ("produces the same Binary.Binary as is found in " ++ goldenFile) $ do
     exists <- doesFileExist goldenFile
     let fixIfFlag err = do
           doFix <- isJust <$> lookupEnv recreateBrokenGoldenEnv
@@ -95,7 +97,7 @@ testConstructor Settings {..} moduleName typeName cap =
             else throwIO err
     if exists
       then
-        compareWithGolden randomMismatchOption topDir mModuleName typeName cap goldenFile
+        compareWithGolden cap goldenFile
           `catches` [ Handler (\(err :: HUnitFailure) -> fixIfFlag err),
                       Handler (\(err :: DecodeError) -> fixIfFlag err)
                     ]
@@ -116,85 +118,22 @@ testConstructor Settings {..} moduleName typeName cap =
         Nothing
 
 -- | The golden files already exist. Binary values with the same seed from
--- the golden files of each constructor and compare.
+-- the golden file and compare the with the data in the golden file.
 compareWithGolden ::
   forall a.
-  (Show a, Eq a, Binary a, ToADTArbitrary a) =>
-  RandomMismatchOption ->
-  String ->
-  Maybe String ->
-  String ->
+  (ToADTArbitrary a, Eq a, Binary.Binary a) =>
   ConstructorArbitraryPair a ->
   FilePath ->
   IO ()
-compareWithGolden randomOption topDir mModuleName typeName cap goldenFile = do
-  fileContent <- readFile goldenFile
-  goldenSampleWithoutBody :: (RandomSamples a) <- binaryDecodeIO fileContent
-  let goldenSeed = seed goldenSampleWithoutBody
-  let sampleSize = Prelude.length $ samples goldenSampleWithoutBody
-  newSamples <- mkRandomADTSamplesForConstructor sampleSize (Proxy :: Proxy a) (capConstructor cap) goldenSeed
-  whenFails (writeComparisonFile newSamples) $ do
-    goldenSamples :: RandomSamples a <- binaryDecodeIO fileContent
-    if newSamples == goldenSamples
-      then -- random samples match; test encoding of samples (the above check only tested the decoding)
-        B.encode newSamples == fileContent `shouldBe` True
-      else do
-        let -- whether to pass the test or fail due to random value mismatch
-            finalResult =
-              case randomOption of
-                RandomMismatchWarning -> return ()
-                RandomMismatchError -> expectationFailure "New random samples generated from seed in golden file do not match samples in golden file."
-
-        -- do a fallback test to determine whether the mismatch is due to a random sample change only,
-        -- or due to a change in encoding
-        putStrLn $
-          "\n"
-            ++ "WARNING: New random samples do not match those in "
-            ++ goldenFile
-            ++ ".\n"
-            ++ "  Testing round-trip decoding/encoding of golden file."
-            ++ "\nExpected: " ++ show goldenSamples
-            ++ "\nBut got:  " ++ show newSamples
-        let reencodedGoldenSamples = B.encode goldenSamples
-        if reencodedGoldenSamples == fileContent
-          then -- pass the test because round-trip decode/encode still gives the same bytes
-            finalResult
-          else do
-            -- how significant is the serialization change?
-            writeReencodedComparisonFile goldenSamples
-            testSamples :: RandomSamples a <- binaryDecodeIO reencodedGoldenSamples
-            let failureMessage =
-                  if testSamples == goldenSamples
-                    then "Encoding has changed in a minor way; still can read old encodings. See " ++ faultyReencodedFile ++ "."
-                    else "Encoding has changed in a major way; cannot read old encodings. See " ++ faultyReencodedFile ++ "."
-            expectationFailure failureMessage
-            finalResult
-  where
-    whenFails :: forall b c. IO c -> IO b -> IO b
-    whenFails = flip onException
-
-    faultyFile = mkFaultyFilePath topDir mModuleName typeName cap
-    faultyReencodedFile = mkFaultyReencodedFilePath topDir mModuleName typeName cap
-
-    writeComparisonFile newSamples = do
-      writeFile faultyFile (B.encode newSamples)
-      putStrLn $
-        "\n"
-          ++ "INFO: Written the current encodings into "
-          ++ faultyFile
-          ++ "."
-    writeReencodedComparisonFile samples = do
-      writeFile faultyReencodedFile (B.encode samples)
-      putStrLn $
-        "\n"
-          ++ "INFO: Written the re-encodings into "
-          ++ faultyReencodedFile
-          ++ "."
+compareWithGolden _cap goldenFile = do
+  goldenBytes <- readFile goldenFile
+  let (randomSamples :: RandomSamples a) = Binary.decode goldenBytes 
+  Binary.encode randomSamples `shouldBe` goldenBytes
 
 -- | The golden files do not exist. Create them for each constructor.
 createGoldenFile ::
   forall a.
-  (Binary a, ToADTArbitrary a) =>
+  (Binary.Binary a, ToADTArbitrary a) =>
   Int ->
   ConstructorArbitraryPair a ->
   FilePath ->
@@ -203,7 +142,7 @@ createGoldenFile sampleSize cap goldenFile = do
   createDirectoryIfMissing True (takeDirectory goldenFile)
   rSeed <- randomIO :: IO Int32
   rSamples <- mkRandomADTSamplesForConstructor sampleSize (Proxy :: Proxy a) (capConstructor cap) rSeed
-  writeFile goldenFile $ B.encode rSamples
+  writeFile goldenFile $ Binary.encode rSamples
 
   putStrLn $
     "\n"
@@ -224,24 +163,6 @@ mkGoldenFilePath topDir mModuleName typeName cap =
   case mModuleName of
     Nothing -> topDir </> typeName </> capConstructor cap <.> "bin"
     Just moduleName -> topDir </> moduleName </> typeName </> capConstructor cap <.> "bin"
-
--- | Create the file path to save results from a failed golden test. Optionally
--- use the module name to help avoid name collisions.  Different modules can
--- have types of the same name.
-mkFaultyFilePath :: forall a. FilePath -> Maybe FilePath -> FilePath -> ConstructorArbitraryPair a -> FilePath
-mkFaultyFilePath topDir mModuleName typeName cap =
-  case mModuleName of
-    Nothing -> topDir </> typeName </> capConstructor cap <.> "faulty" <.> "bin"
-    Just moduleName -> topDir </> moduleName </> typeName </> capConstructor cap <.> "faulty" <.> "bin"
-
--- | Create the file path to save results from a failed fallback golden test. Optionally
--- use the module name to help avoid name collisions.  Different modules can
--- have types of the same name.
-mkFaultyReencodedFilePath :: forall a. FilePath -> Maybe FilePath -> FilePath -> ConstructorArbitraryPair a -> FilePath
-mkFaultyReencodedFilePath topDir mModuleName typeName cap =
-  case mModuleName of
-    Nothing -> topDir </> typeName </> capConstructor cap <.> "faulty" <.> "reencoded" <.> "bin"
-    Just moduleName -> topDir </> moduleName </> typeName </> capConstructor cap <.> "faulty" <.> "reencoded" <.> "bin"
 
 -- | Create a number of arbitrary instances of a particular constructor given
 -- a sample size and a random seed.
@@ -277,11 +198,6 @@ mkGoldenFileForType sampleSize Proxy goldenPath = do
             createDirectoryIfMissing True (takeDirectory goldenFile)
             rSeed <- randomIO :: IO Int32
             rSamples <- mkRandomADTSamplesForConstructor sampleSize (Proxy :: Proxy a) (capConstructor constructor) rSeed
-            writeFile goldenFile $ B.encode rSamples
+            writeFile goldenFile $ Binary.encode rSamples
     )
     constructors
-
--- | run decode in IO, if it returns Left then throw an error.
-binaryDecodeIO :: Binary a => ByteString -> IO a
-binaryDecodeIO bs = return $ B.decode bs
-
